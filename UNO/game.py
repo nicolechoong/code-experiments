@@ -1,56 +1,108 @@
-# 1 PLAYER VS COMPUTER, COMPUTER MAKES RANDOM MOVES
-
 import random
 import time
-player = []
-com = []
-deck = []
+import copy
 
-def genDeck():
-    for i in ["R","Y","G","B"]:
-        for j in range(0,10):
-            card = i+str(j)
-            deck.append(card)
-        for j in ["S","T","R"]:
-            card = i+str(j)
-            deck.append(card)
-    deck.append("+4")
-    deck.append("+4")
-    deck.append("WC")
-    deck.append("WC")
+class Card:
 
-def randomCard():
-    card = deck[random.randint(0,len(deck)-1)]
-    deck.remove(card)
-    return card
+    def __init__(self, colour, value, special):
+        self.colour = colour
+        self.value = value
+        self.special = special
 
-def startGame():
-    for i in [player,com]:
-        for j in range(0,8):
-            i.append(randomCard())
-    topcard = randomCard()
+    def __str__(self):
+        colKey = {"R":"Red ","Y":"Yellow ","G":"Green ","B":"Blue ",None:""}
 
-    while topcard[1] in ["S","T","R"] or topcard in ["+4","WC"]:
-        topcard = randomCard()
-
-    return topcard
-
-def findAndRemove(card, col, val):
-    if card in player and (card[0] == col or card[1] == val or card in ["WC", "+4"]):
-        player.remove(card)
-
-def isChainValid(chain, col, val):
-    for card in chain:
-
-        if card not in player:
-            return False
-
-        if card[0] != col and card[1] != val:
-            return False
+        if self.special:
+            valKey = {"S":"Skip","R":"Reverse","+2":"Draw 2","+4":"Draw 4", "WC":"Wildcard"}
+            return colKey[self.colour] + valKey[self.value]
 
         else:
-            val = card[1]
+            return colKey[self.colour] + self.value
 
+# DECK CONTROLLING FUNCTIONS
+
+def genDeck():
+    global deck
+
+    for i in ["R","Y","G","B"]:
+        for j in range(0,10):
+            deck.append(Card(i,str(j), False))
+
+        for j in ["+2","S","R"]:
+            deck.append(Card(i,j, True))
+
+    for i in range(0,2):
+        deck.append(Card(None, "+4", True))
+        deck.append(Card(None, "WC", True))
+
+def randomCard():
+    global deck, topcard, pile
+
+    if len(deck) == 0:
+        deck = copy.deepcopy(pile)
+
+        for i in deck:
+            print(i)
+
+
+        if topcard in ["WC", "+4"]:
+            topcard.colour = None
+            pile = [topcard]
+
+    card = deck[random.randint(0,len(deck)-1)]
+    deck.remove(card)
+
+    return card
+
+# VARIOUS SHARED TURN FUNCTIONS
+
+def chooseColour(play):
+    if play == player:
+        while True:
+            colour = input("\nChoose the colour:\n   > ").upper()
+
+            if colour in ["R","Y","G","B"]:
+                return colour
+
+            elif colour in ["RED","YELLOW","GREEN","BLUE"]:
+                return colour[0]
+
+            print("\nInvalid colour")
+    else:
+        for card in com:
+
+            if card.colour in ["R","Y","G","B"]:
+                return card.colour
+
+def isChainValid(cards, topcard):
+    if cards[0].colour is None:
+        return True
+
+    if topcard.value == cards[0].value:
+        return True
+
+    if topcard.colour != cards[0].colour:
+        return False
+
+    else:
+        val = cards[0].value
+        for cardIndex in cards:
+
+            if cardIndex.value != val:
+                return False
+
+    return True
+
+def cardsCheck(cards):
+    if player[int(cards[0])-1].colour is None:
+        return True
+
+    for card in cards:
+        try:
+            if int(card) not in range(1,len(player)+1):
+                return False
+        except:
+            return False
     return True
 
 def drawCard(op,n):
@@ -63,162 +115,197 @@ def drawCard(op,n):
     for i in range(0,n):
         op.append(randomCard())
 
-def chainDraw(chain):
-    drawcount = 2*chain.count("T")
+def chainDraw(cards, op):
+    if cards[0].value == "+2":
+        drawCard(op, 2*len(cards))
 
-    if drawcount > 0:
-        drawCard(com, drawcount)
+    elif cards[0].value == "+4":
+        drawCard(op, 4*len(cards))
 
-    drawcount = 4*chain.count("+")
+# PLAYER'S TURN CODE
 
-    if drawcount > 0:
-        drawCard(com, drawcount)
+def displayDeck():
+    print("\nYour deck: ")
+    for i in range(1,len(player)+1):
+        print("[%s] %s" %(str(i), player[i-1]))
 
-def inputCard(col, val):
+def inputCard(topcard):
+    global player
     while True:
-        print("Your deck: ")
-        print(player)
-        card = input("Please choose a card from your deck:\n   > ")
+        displayDeck()
+        cardInput = input("\nPlease choose a card from your deck or DRAW:\n   > ")
 
-        if card == "DRAW":
-            print("Player Draws!")
-            player.append(randomCard())
-            card = col+val
-            return card, True
+        if cardInput != "":
 
-        elif "&" in card:
-            chain = card.split("&")
-
-            if isChainValid(chain, col, val):
-                for chaincard in chain:
-                    findAndRemove(chaincard,col,val)
-                    col, val = chaincard[0], chaincard[1]
-                chainDraw(card)
-                return chaincard, False
+            if cardInput.upper() == "DRAW":
+                print("\nPlayer Draws!")
+                player.append(randomCard())
+                return topcard, True
 
             else:
-                print("Invalid card\n")
+                try:
+                    cardsIndex = cardInput.split("&")
 
-        elif "&" not in card and card in player and (card[0] == col or card[1] == val or card in ["WC", "+4"]):
-            findAndRemove(card,col,val)
-            return card, False
+                    for i in range(0,len(cardsIndex)):
+                        cardsIndex[i] = int(cardsIndex[i])
+
+                    if cardsCheck(cardsIndex):
+                        cards = []
+                        for i in range(0,len(cardsIndex)):
+                            cards.append(player[cardsIndex[i]-1])
+
+                        if isChainValid(cards, topcard):
+                            if len(cards) > 1:
+                                for i in cards:
+                                    pile.append(i)
+
+                                chain = sorted(cardsIndex, reverse=True)
+                                for index in chain:
+                                    player.pop(index-1)
+
+                                chainDraw(cards, com)
+
+                                topcard = cards[-1]
+                                return topcard, False
+
+                            else:
+                                player.remove(cards[0])
+                                pile.append(cards[0])
+                                topcard = cards[-1]
+                                chainDraw(cards, com)
+                                return topcard, False
+
+                        else:
+                            print("\nPlease select an option from the menu above!\n\nTopcard: "+str(topcard))
+
+                    else:
+                        print("\nPlease select an option from the menu above!\n\nTopcard: "+str(topcard))
+
+                except:
+                        print("\nPlease select an option from the menu above!\n\nTopcard: "+str(topcard))
 
         else:
-            print("Invalid card\n")
+            print("\nPlease select an option from the menu above!\n\nTopcard: "+str(topcard))
 
-def comChain(i):
-    chain = i
-    com.remove(i)
-    if i == "+4":
-        for card in com:
+# COMPUTER'S TURN CODE
 
-            if card[1] == i[1] and card[0] != "+":
-                chain += "&" + card
-                com.remove(card)
-    chainDraw(chain)
+def comChain(firstCard):
+    chain = [firstCard]
+    com.remove(firstCard)
+    pile.append(firstCard)
+
+    for card in com:
+        if card.value == firstCard.value and card.colour is not None:
+            chain.append(card)
+            com.remove(card)
+            pile.append(card)
+
     return chain
 
-def comChoose(col,val):
+def comChoose(topcard):
+    global com
+
     time.sleep(random.randint(1,3))
-    for i in com:
+    for card in com:
 
-        if i[0] == col or i[1] == val or i in ["WC", "+4"]:
-            i = comChain(i)
-            print("Computer: "+i)
-            return i, False
+        if topcard.colour == card.colour or topcard.value == card.value :
+            card = comChain(card)
 
+            output = ""
+            for i in card:
+                output += str(i) + " & "
+            print("\nComputer: "+output[:-3])
+            chainDraw(card, player)
+
+            return card[-1], False
+
+    print("\nComputer Draws!")
     com.append(randomCard())
-    card = col+val
-    print("Computer Draws!")
-    return card, True
+    return topcard, True
 
-def chooseColour(play):
-    if play == player:
-        while True:
-            col = input("Choose the colour:\n   > ")
+# TURN CONTROLLER
 
-            if col in ["R","G","Y","B"]:
-                return col
-
-            print("Invalid colour")
-    else:
-        for i in com[0]:
-
-            if i[0] in ["R","G","Y","B"]:
-                return i[0]
-
-def checkEnd(play):
-    if len(play) == 0:
-        return True
-
-def turn(topcard, play, op):
-    endGame = False
+def turn(topcard, play):
     while True:
-        print()
-        print("Topcard: "+topcard)
-        col, val = topcard[0],topcard[1]
+        print("\nTopcard: "+str(topcard))
 
         if play == player:
-            card,draw = inputCard(col, val)
+            topcard, draw = inputCard(topcard)
 
         else:
-            card,draw = comChoose(col, val)
+            topcard, draw = comChoose(topcard)
 
-        if checkEnd(play):
-            if play == player:
-                endGame = "Player"
-
-            else:
-                endGame = "Computer"
-            break
-
-        col, val = card[0],card[1]
+        endGame = checkEnd(play)
 
         if draw == False:
-            if card == "WC":
-                col = chooseColour(play)
+            if topcard.colour is None:
+                topcard = Card(chooseColour(play), copy.deepcopy(topcard.value), True)
 
-            elif card == "+4":
-                drawCard(op,4)
-                col = chooseColour(play)
-                val = "C"
-            topcard = col+val
-
-            if val != "S":
+            if topcard.value != "S":
                 break
         else:
             break
     return topcard, endGame
 
+# GAME CONTROL
+
+def startGame():
+    global player, com
+
+    for i in [player,com]:
+        for j in range(0,8):
+            i.append(randomCard())
+
+    topcard = randomCard()
+
+    while topcard.value in ["S","+2","R", "+4","WC"]:
+        topcard = randomCard()
+
+    return topcard
+
+def checkEnd(play):
+    if len(play) == 0:
+        if play == player:
+            return "Player"
+        else:
+            return "Computer"
+    else:
+        return False
+
 def main():
+    global player, com, deck, pile, topcard
+
+    player = []
+    com = []
+    deck = []
     genDeck()
+    topcard = startGame()
+    pile = [topcard]
+
     endGame = False
     count = 0
-    topcard = startGame()
+
     while endGame == False:
         count += 1
 
         if count%2 == 1:
-            topcard, endGame = turn(topcard,player,com)
+            topcard, endGame = turn(topcard, player)
 
         else:
-            topcard, endGame = turn(topcard,com,player)
+            topcard, endGame = turn(topcard, com)
 
     print("\n"+endGame,"wins!")
+
+# MENU
 
 def menu():
     while True:
         page = input("\nTEXT-BASED ARCADE: UNO\n\t[1] Instructions\n\t[2] Play!\n\t[3] Quit\n\n   > ")
 
         if page == "1":
-            print("HELLO!")
+            print("\nHELLO!")
             print("THIS IS TEXT-BASED UNO.")
-            print("\nStandard cards are represented by a letter representing the colour (R/Y/G/B) followed by its number (0-9).")
-            print("For example, green 6 would become G6.")
-            print("Instead of a number, special cards are represented according to the following key:")
-            print("\tS: Skip\n\tR: Reverse (no u)\n\tT: Draw 2")
-            print("Draw 4 cards are represented simply as '+4'")
-            print("To play a card, just type it into the field.")
+            print("To play a card, just enter its index number into the field.")
             print("If you have no playable cards, you can draw by typing 'DRAW'")
             print("\nALSO! You can chain cards using the & symbol between two cards (Eg. Y4&B4).")
 
@@ -230,5 +317,11 @@ def menu():
 
         else:
             print("\nPlease select an option from the menu above!")
+
+player = []
+com = []
+deck = []
+pile = []
+topcard = ""
 
 menu()
